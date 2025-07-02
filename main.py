@@ -31,7 +31,27 @@ def decode_ref(b64):
     except:
         return None
 
-def register_task(ref_code, queue, scraper):
+def load_proxies():
+    try:
+        with open("proxies.txt") as f:
+            return [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        print("❌ proxies.txt not found.")
+        return []
+
+def create_scraper(proxy=None):
+    scraper = cloudscraper.create_scraper(
+        browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False}
+    )
+    if proxy:
+        scraper.proxies = {
+            "http": proxy,
+            "https": proxy
+        }
+    return scraper
+
+def register_task(ref_code, queue, proxy=None):
+    scraper = create_scraper(proxy)
     while True:
         try:
             _ = queue.get_nowait()
@@ -82,14 +102,15 @@ def register_task(ref_code, queue, scraper):
         else:
             print(f"❌ Skipped: {email}")
 
-def run_batch(ref_code, scraper):
+def run_batch(ref_code, proxies=None):
     queue = Queue()
     for _ in range(BATCH_SIZE):
         queue.put(None)
 
     threads = []
     for _ in range(THREADS):
-        t = threading.Thread(target=register_task, args=(ref_code, queue, scraper))
+        proxy = random.choice(proxies) if proxies else None
+        t = threading.Thread(target=register_task, args=(ref_code, queue, proxy))
         t.start()
         threads.append(t)
 
@@ -105,16 +126,26 @@ if __name__ == "__main__":
         print("❌ code.txt not found.")
         exit()
 
-    scraper = cloudscraper.create_scraper(
-        browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False}
-    )
-    print("🔌 Proxy Mode: OFF")
+    print("\nChoose mode:")
+    print("1. Run with proxy")
+    print("2. Run without proxy")
+    mode = input("Enter 1 or 2: ").strip()
+
+    if mode == "1":
+        proxies = load_proxies()
+        if not proxies:
+            print("❌ No proxies loaded. Exiting.")
+            exit()
+        print("🔌 Proxy Mode: ON")
+    else:
+        proxies = None
+        print("🔌 Proxy Mode: OFF")
 
     try:
         while True:
             for code in codes:
                 print(f"\n🚀 New batch for referral code: {code}")
-                run_batch(code, scraper)
+                run_batch(code, proxies)
                 time.sleep(5)
     except KeyboardInterrupt:
         print("\n🛑 Stopped by user.")
