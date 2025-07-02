@@ -4,15 +4,12 @@ import string
 import base64
 import time
 import threading
-import os
 from queue import Queue
 
-# === Config ===
-THREADS = 50         # lowered to reduce request bursts
+THREADS = 10
 RETRY_LIMIT = 2
-BATCH_SIZE = 100     # keeping it manageable
+BATCH_SIZE = 10
 
-# === Random Generators ===
 def random_string(min_len=3, max_len=8):
     return ''.join(random.choices(string.ascii_lowercase, k=random.randint(min_len, max_len))).capitalize()
 
@@ -34,7 +31,6 @@ def decode_ref(b64):
     except:
         return None
 
-# === Registration Task ===
 def register_task(ref_code, queue, scraper):
     while True:
         try:
@@ -65,15 +61,17 @@ def register_task(ref_code, queue, scraper):
         headers = {
             "Origin": "https://aetheris.company",
             "Referer": ref_url,
-            "User-Agent": scraper.headers.get('User-Agent', ''),
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive"
         }
 
         for _ in range(RETRY_LIMIT):
             try:
                 res = scraper.post("https://aetheris.company/api/reg", json=payload, headers=headers, timeout=15)
-                if res.status_code == 200 and "token" in res.json():
+                if res.status_code == 200 and "token" in res.text:
                     print(f"✅ Registered: {email} | Password: {password}")
                     break
                 else:
@@ -84,7 +82,6 @@ def register_task(ref_code, queue, scraper):
         else:
             print(f"❌ Skipped: {email}")
 
-# === Batch Runner ===
 def run_batch(ref_code, scraper):
     queue = Queue()
     for _ in range(BATCH_SIZE):
@@ -99,7 +96,6 @@ def run_batch(ref_code, scraper):
     for t in threads:
         t.join()
 
-# === Main ===
 if __name__ == "__main__":
     print("\n🌲 FOREST ARMY — Cloudscraper Referral Bot")
     try:
@@ -119,6 +115,6 @@ if __name__ == "__main__":
             for code in codes:
                 print(f"\n🚀 New batch for referral code: {code}")
                 run_batch(code, scraper)
-                time.sleep(5)  # pause between batches
+                time.sleep(5)
     except KeyboardInterrupt:
         print("\n🛑 Stopped by user.")
